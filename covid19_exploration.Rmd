@@ -1,0 +1,214 @@
+---
+title: "Exploration of Covid-19 and covariates data"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r, setup, include=FALSE}
+require(mosaic)   # Load additional packages here 
+knitr::opts_chunk$set(
+  tidy=FALSE,     # display code as typed
+  size="small",
+  message = FALSE,
+  warning = FALSE)   # slightly smaller font for code
+```
+
+# Libraries
+
+```{r}
+library(tidyverse)
+library(readxl)
+library(here)
+library(kableExtra)
+library(DT)
+library(rebus)
+```
+
+
+# Loading the datasets
+
+Here I will explore the datasets for the thesis: Covid-19 cases registered in each municipality of Belgium, administered vaccines, and the covariates data (N02, 03,PM10, PM2.5, BC)
+
+Data for Covid-19 were downloaded [here](https://epistat.sciensano.be/covid/) and includes two datasets.
+The codebook for the data sets is located [here](https://epistat.sciensano.be/COVID19BE_codebook.pdf)
+
+1) Confirmed cases by date and municipality
+2) Administered vaccines by week, municipality, age and dose
+
+
+# Exploring the datasets
+
+## Covid19 cases per municipality dataset
+
+```{r}
+cases <- read.csv(here("data", "COVID19BE_CASES_MUNI.csv"))
+```
+
+Cases dataset has the following columns: date (of the first symptoms, 2020-2023), NIS municipality code, Dutch and French municipalities' names, Administrative district name in Dutch and French, Belgian Province, Belgian Region, and the number of confirmed cases
+
+Let's first have a quick look at the dataset:
+
+```{r}
+glimpse(cases)
+```
+How many missing data points in each column?
+
+```{r}
+map(cases, ~ sum(is.na(.x)))
+```
+
+There are 1071 row of data (including all years 2020-2023 and most of the moths), where there is no information on municipality. Can we just remove these rows? 
+
+**Exploring the data without missing information: cases per municipality**
+
+I will remove unnecessary columns and rename some. I also separate date into year, month and day
+```{r}
+cases_prep <- cases |> 
+  filter(!is.na(NIS5)) |> 
+  select(c(NIS5, DATE, PROVINCE, REGION, CASES)) |> 
+  rename(mcp_code = NIS5,
+         date = DATE,
+         province = PROVINCE,
+         region = REGION,
+         cases = CASES) |> 
+  mutate(year = lubridate::year(date),
+         month = lubridate::month(date),
+         day = lubridate::day(date)
+         )
+```
+
+Now we can have a look at the frequency of Covid-19 records. How many observations are made per month of the year?
+Here I will replace <5 counts of cases with "4", but later we can decide to do it differently.
+
+```{r}
+#create a summary table with year, month and mean, max and min cases per month. But first change <5 to 5 to make the column numerical.
+
+cases_summary <- cases_prep |> 
+  mutate(cases = ifelse(cases == "<5", 5, cases)) |>
+  mutate(cases = as.numeric(cases)) |> 
+  group_by(mcp_code, year, month) |> 
+  summarize(min = min(cases),
+            max=max(cases),
+            mean = mean(cases)) 
+
+#the distribution of the mean cases count per municipality
+mosaic::fav_stats(cases_summary$mean)
+```
+
+
+**How many records are made per municipality?**
+
+```{r}
+library(gt)
+```
+
+
+```{r}
+mcp_summary_months <- cases_prep |> 
+  group_by(mcp_code, year) |> 
+  summarise(n_month = n_distinct(month)) 
+
+  
+#kable(mcp_summary_months, "html") %>% kable_styling("striped") %>% scroll_box(width = "100%")
+#
+datatable(mcp_summary_months)
+```
+
+In some municipalities, for instance, Limburg 2021 (73028), cases were registered not every month but only in April, October, November, December. What would be the best way to aggregate counts per week then?
+
+```{r}
+mcp_summary_days <- cases_prep |> 
+  group_by(mcp_code, year, month) |> 
+  summarise(n_days = n_distinct(day)) 
+
+
+datatable(mcp_summary_days)
+```
+
+Similarly, there will not be registrations of COVID19 every day, in some municipalities and months (like 11004 in June 2020), only 1 record was made. I will compare how Lowe et al. had their dengue data, it is possible they had the same problem.
+
+
+
+## Administered vaccines dataset
+
+```{r}
+vaccine <- read.csv(here("data", "COVID19BE_VACC_MUNI_CUM.csv"))
+```
+
+This datasets has the following columns: year_week (combined year and week information), municipality code, age group, dose (1st, 2nd, booster), cumulative number of people receiving the vaccine of a particular dose
+
+Check if there are missing data points in the vaccine dataset: 4317 rows with missing municipality information
+
+```{r}
+map(vaccine, ~ sum(is.na(.x)))
+```
+Let's take a look at rows with missing mcp information
+
+```{r}
+vaccine |> 
+  filter(is.na(NIS5)) |> 
+  slice_head(n=20)
+```
+
+?? Without municipality information, the data is useless, right?
+
+* Age groups included are: "18-24" "25-34" "45-54" "55-64" "65-74" "75-84" "85+"   "35-44" "0-17" 
+
+* Type of doses included are: "A"  "C"  "B"  "E"  "E2" "E3"
+
+Here also we have <10 in the number of people receiving the dose. Will we change that number of 10 or to 9?
+
+Change column names, separate year and week
+```{r}
+vaccine_prep <- vaccine |> 
+  mutate(year = str_extract(YEAR_WEEK, "^[[:digit:]]{2}")) |> 
+  mutate(week = str_extract(YEAR_WEEK, "[[:digit:]]{2}$")) |> 
+  janitor::clean_names() |> 
+  rename(mcp_code = nis5,
+         age_group = agegroup,
+         cumulative_n_vaccinated = cumul)
+```
+
+
+**How many observations we have per month/ are all weeks included?**
+
+```{r}
+vac_weekly <- vaccine_prep |> 
+  group_by(year) |> 
+  summarize(n_weeks = n_distinct(week))
+
+kable(vac_weekly) |> kable_classic_2(full_width = F)
+
+```
+
+People start to be vaccinated only at the end of 2020, so we have only 1 week with data for that year. The data on 2023 is yet insufficient, likely, we will not use 2023 at all in our analyses.
+
+?? Are we interested in any dose? Or should booster doses be excluded?
+
+
+  
+```{r echo=FALSE}
+#sessionInfo()  # could use devtools::session_info() if you prefer that
+
+# Documenting R session 
+
+  # * File creation date: `r Sys.Date()`
+  # * `r R.version.string`
+  # * R version (short form): `r getRversion()`
+  # * `mosaic` package version: `r packageVersion("mosaic")`
+  # * `inla` package version: `r packageVersion("inla")``
+  # * Additional session information
+
+```
+  
