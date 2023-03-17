@@ -1,0 +1,182 @@
+---
+title: "Preparation of Covid-19 and Pollution data"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r, setup, include=FALSE}
+require(mosaic) # Load additional packages here
+knitr::opts_chunk$set(
+  tidy = FALSE, # display code as typed
+  size = "small",
+  message = FALSE,
+  warning = FALSE
+) # slightly smaller font for code
+```
+
+
+In this file, I will clean and prepare all the datasets for the project: covid19 cases in Belgium (per municipality), administered vaccines data and pollution data.
+
+The goal is to prepare a joint datsets where covid19 cases are combined with the covariates data (pollution and maybe other covariates). This main dataset will be further used in the DLNMs.
+
+
+
+```{r, include=FALSE}
+library(tidyverse)
+library(readxl)
+library(here)
+library(kableExtra)
+library(DT)
+library(rebus)
+library(data.table)
+```
+
+# Covid19 cases dataset
+
+```{r}
+cases <- read.csv(here("data", "COVID19BE_CASES_MUNI.csv"))
+```
+
+I will note all important steps I do for the data cleaning. First, we decided to remove the 1071 rows where there is no information on the municipality or region.
+
+Then, we need to replace the "<5" counts if we random number generated from the `runif` function with minimum of 0 and maximum of 4.
+
+Finally, because records of Covid19 were not made every day (not even every month in some municipalities), we need to make these datapoints explicit with zero cases of Covid19. In other words, we assume that no registered cases means there were truly no cases in a given municiaplity at a given month.
+
+```{r}
+set.seed(110323)
+
+cases_prep <- cases |>
+  filter(!is.na(NIS5)) |>
+  select(c(NIS5, DATE, TX_DESCR_NL, PROVINCE, REGION, CASES)) |>
+  rename(
+    mcp_code = NIS5,
+    mcp_name = TX_DESCR_NL,
+    date = DATE,
+    province = PROVINCE,
+    region = REGION,
+    cases = CASES
+  ) |>
+  mutate(
+    year = lubridate::year(date),
+    month = lubridate::month(date),
+    day = lubridate::day(date),
+    cases = ifelse(cases == "<5", NA, cases),
+    cases = as.numeric(cases)
+  ) |>
+  rowwise() |>
+  mutate(cases = if_else(is.na(cases),
+    round(runif(1, min = 0, max = 4), 0),
+    cases
+  ))
+```
+
+
+I choose only year 2021 that we will use for analyses
+```{r}
+days21 <- data.frame(date = seq(as.Date("2021-01-01"), as.Date("2021-12-31"), by = "+1 day"))
+
+cases_prep2 <- cases_prep |>
+  filter(year == "2021") |>
+  mutate(date = as.Date(date)) |> 
+  select(c(mcp_code, date, mcp_name, province, region, cases))
+
+
+cases_bymp <- split(cases_prep2, cases_prep2$mcp_code)
+```
+
+
+Next, I will add calendar dates to each municipality when no Covid19 records were made.
+
+```{r}
+cases_bymp_prep <- cases_bymp %>%
+  purrr::map(., ~ right_join(.x, days21, by = "date")) %>%
+  purrr::map(., ~ ungroup(.x)) %>%
+  purrr::map(., ~ mutate(.x, mcp_code_new = rep(mcp_code[1], 365) )) %>%
+  purrr::map(., ~ mutate(.x, mcp_name_new = rep(mcp_name[1], 365))) %>%
+  purrr::map(., ~ mutate(.x, province_new = rep(province[1], 365))) %>%
+  purrr::map(., ~ mutate(.x, region_new = rep(region[1], 365)))
+
+# check that the function worked
+# cases_bymp_prep[["73028"]]
+# cases_bymp_prep[["11001"]]
+#
+# What is the length of each new dataset per municipality? Should be 365 - OK!
+# map(cases_bymp_prep, ~ nrow(.x))
+```
+
+Finally, I recreate the dataset with all municipalities
+
+```{r}
+cases_filled <- do.call("rbind", cases_bymp_prep)
+
+cases_filled_prep <- cases_filled |> 
+  select(c(date, mcp_code_new, mcp_name_new,
+           province_new, region_new, cases)) |> 
+  rename(mcp_code = mcp_code_new,
+         mcp_name = mcp_name_new,
+         province = province_new,
+         region = region_new) |> 
+  mutate(
+    year = lubridate::year(date),
+    month = lubridate::month(date),
+    day = lubridate::day(date))
+```
+
+Finally, in this full dataset we can replace NA in cases with zeroes, assuming no record means no cases in a municipality
+
+```{r}
+cases_filled_prep2 <- cases_filled_prep |> 
+  mutate(cases = ifelse(is.na(cases),
+                        0,
+                        cases))
+```
+
+save this dataset
+```{r}
+write.csv(cases_filled_prep2, row.names = F, "./output/covid19_cases_perday_0filled.csv")
+```
+
+## Mean cases of Covid19 per month
+
+For the additional exploratory figures, I create mean covid19 counts, for later making maps of monthly mean counts
+```{r}
+covid_monthly_mean_total <- cases_filled_prep2 |> 
+  group_by(mcp_code, mcp_name, province, region, month) |> 
+  summarize(mean_monthly = mean(cases),
+            total_monthly = sum(cases))
+```
+
+```{r}
+write.csv(covid_monthly_mean_total, "./output/covid19_monthly_mean_n_total.csv", row.names = F)
+```
+
+## The distribution of Covid19 cases in 2021 per municipality
+
+```{r}
+dist <- ggplot(data = cases_filled_prep2,
+               aes(x=cases)) +
+  geom_density(alpha=0.4, fill="seagreen", color="darkgreen") +
+  facet_wrap(.~ province) +
+  theme_bw() +
+  theme(strip.background = element_rect(color = "white", fill = "white"),
+        strip.text = element_text(size=12, face = "bold")) +
+  labs(y = "Cases density", "COVID19 cases")
+  
+```
+
+```{r}
+ggsave(dist, file = "./figs/distribution_covid19_province.pdf", dpi = 250)
+```
+
