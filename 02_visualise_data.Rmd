@@ -1,0 +1,140 @@
+---
+title: "Data visualisation"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(here)
+library(sf)
+library(ggthemes)
+library(RColorBrewer)
+```
+
+## Loading data and shapefiles
+
+```{r}
+covid <- read.csv(here("output", "covid19_monthly_mean_n_total.csv"))
+
+covid$mcp_code <- as.character(covid$mcp_code)
+```
+
+```{r, message=F}
+map <- st_read(here("data", "belgium_shape", "Apn_AdMu.shp"))
+# Projected CRS: ETRS89 / Belgian Lambert 2008
+```
+
+
+
+# Preparation of the data
+
+In the MAP dataset, we are interested in the municipality code,AdMuKey and the geometry. The other columns of interest (province and covid19 cases) I will add from the covid19 table (by left joining it to map dataframe).
+
+```{r}
+map_prep <- map |>
+  select(c(AdMuKey, Stat_Area:geometry)) |>
+  rename(mcp_code = AdMuKey) |>
+  janitor::clean_names() |>
+  left_join(covid, by = "mcp_code") |>
+  mutate(month_char = recode(
+    month, "January", "February",
+    "March", "April",
+    "May", "June", "July",
+    "August", "September", "October", "November",
+    "December"
+  ))
+```
+
+# Mapping total monthly COVID-19 cases
+
+```{r}
+breaks1 <- seq(0, 14000, by = 1000)
+```
+
+
+```{r}
+map1 <- ggplot(map_prep) +
+  geom_sf(aes(fill = total_monthly), lwd = 0.1) +
+  scale_fill_gradientn(colours = brewer.pal(9, "PuRd"),
+                      breaks = c(0, 10, 100,  1000, 10000 ),
+                       labels = c(0, 10, 100,  1000, 10000),
+              trans = "log1p") +
+  labs(fill = "Total COVID-19 \ncases per month") +
+  facet_wrap(. ~ month_char) +
+  theme_void() +
+  theme(strip.text = element_text(face = "bold", size = 11)) 
+  
+
+
+```
+
+
+```{r}
+ggsave(filename = "./figs/monthly_total_covid_mcp.pdf", plot=map1, 
+       height = 20, width = 30, units = "cm")
+```
+
+# Cases of COVID-19 per municipality and month
+
+```{r}
+cases_province <- covid |> 
+  group_by(province, month) |> 
+  summarise(total = sum(total_monthly),
+            mean = mean(mean_monthly)) |> 
+  mutate(month_char = recode(
+    month, "January", "February",
+    "March", "April",
+    "May", "June", "July",
+    "August", "September", "October", "November",
+    "December"
+  )) |> 
+  mutate(province = replace(province, province == "OostVlaanderen", "Oost-Vlaanderen")) |> 
+  mutate(province = replace(province, province == "WestVlaanderen", "West-Vlaanderen" )) |> 
+  mutate(province = replace(province, province == "VlaamsBrabant", "Vlaams-Brabant" )) |> 
+   mutate(province = replace(province, province == "BrabantWallon", "Brabant-Wallon" ))
+
+
+```
+
+
+
+
+```{r}
+plot2 <- ggplot(data = cases_province,
+               aes(x=fct_reorder(month_char, month, min ), 
+                   y = total, group=1)) +
+  geom_line(alpha=0.8,  color="deeppink1", linewidth = 1.5) +
+  geom_point(color = "deeppink3", aes(size=total)) +
+  facet_wrap(province ~.) +
+  theme_bw() +
+  theme(strip.background = element_rect(color = "white", fill = "white"),
+        strip.text = element_text(size=12, face = "bold"),
+        axis.text.x = element_text(angle = 90),
+        legend.title = element_blank()) +
+  labs(y = "Total cases", x = "", fill="Total")
+
+
+```
+
+```{r}
+ggsave("./figs/monthly_total_covid_province.pdf",plot=plot2, 
+       height = 20, width = 25, units = "cm" )
+```
+

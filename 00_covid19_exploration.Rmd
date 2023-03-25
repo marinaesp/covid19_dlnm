@@ -199,6 +199,7 @@ bias_proportion <- cases_prep |>
 
 kable(bias_proportion) |> kable_paper("hover", full_width = F)
 ```
+
 Only in November and December the proportion of <5 counts was as small as 16 and 22%, respectively. In all other months, the proportion of such values varies between 50 and 70%. 
 
 Create a figure of bias proportions
@@ -225,7 +226,7 @@ ggsave(plot = plot2, filename = "./figs/prop_less_than5_cases.pdf",
 vaccine <- read.csv(here("data", "COVID19BE_VACC_MUNI_CUM.csv"))
 ```
 
-This datasets has the following columns: year_week (combined year and week information), municipality code, age group, dose (1st, 2nd, booster), cumulative number of people receiving the vaccine of a particular dose
+This dataset has the following columns: year_week (combined year and week information), municipality code, age group, dose (1st, 2nd, booster), cumulative number of people receiving the vaccine of a particular dose
 
 Check if there are missing data points in the vaccine dataset: 4317 rows with missing municipality information
 
