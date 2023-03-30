@@ -57,6 +57,8 @@ cases <- read.csv(here("data", "COVID19BE_CASES_MUNI.csv"))
 
 Cases dataset has the following columns: date (of the first symptoms, 2020-2023), NIS municipality code, Dutch and French municipalities' names, Administrative district name in Dutch and French, Belgian Province, Belgian Region, and the number of confirmed cases
 
+
+
 Let's first have a quick look at the dataset:
 
 ```{r}
@@ -69,6 +71,15 @@ map(cases, ~ sum(is.na(.x)))
 ```
 
 There are 1071 row of data (including all years 2020-2023 and most of the moths), where there is no information on municipality. Can we just remove these rows? 
+
+
+How many of such observations without municipality information were in 2021?
+
+```{r}
+test <- cases |> filter(str_detect(DATE, "2021."))
+map(test, ~ sum(is.na(.x)))#365
+```
+
 
 **Exploring the data without missing information: cases per municipality**
 
@@ -148,9 +159,12 @@ cases_prep |>
   filter(cases == "<5") |> 
   nrow()
 ```
+
 230954 out of 418341, which is 55%.
 
 How many times per month (regardless of a municipality), we observe <5 values in the data set? Here, I will look at 2021 year only
+
+**Data for 2021**: there are 153308 observations in total.
 
 ```{r}
 bias_monthly <- cases_prep |> 
@@ -160,7 +174,8 @@ bias_monthly <- cases_prep |>
 
 breaks1 <- seq(1, 12, by=1)
 breaks1y <-seq(2500, 9000, by = 2000)
-  
+
+bias_monthly
 ```
 
 
@@ -187,7 +202,7 @@ ggsave(plot = plot1, filename = "./figs/count_less_than5_cases.pdf",
 
 Only at the end of 2021 the count of <5 was small, but all other months - about the same (except in June 2021).
 
-But what is the proportion of <6 counts per month, dose it differ between months?
+But what is the proportion of <5 counts per month, dose it differ between months?
 
 ```{r}
 bias_proportion <- cases_prep |> 
@@ -241,7 +256,7 @@ vaccine |>
   slice_head(n=20)
 ```
 
-?? Without municipality information, the data is useless, right?
+?? Without municipality information, the data is useless, right? Yes
 
 * Age groups included are: "18-24" "25-34" "45-54" "55-64" "65-74" "75-84" "85+"   "35-44" "0-17" 
 
@@ -274,7 +289,7 @@ kable(vac_weekly) |> kable_classic_2(full_width = F)
 
 People start to be vaccinated only at the end of 2020, so we have only 1 week with data for that year. The data on 2023 is yet insufficient, likely, we will not use 2023 at all in our analyses.
 
-?? Are we interested in any dose? Or should booster doses be excluded?
+
 
 
   
