@@ -173,6 +173,23 @@ map_incidence <- map_prep |>
 ```
 
 
+Save the table of COVID-19 incidences per month
+
+```{r}
+incidence_dataset <- st_set_geometry(map_incidence, NULL) |> 
+  select(c(mcp_code, mcp_name:incidence))
+```
+
+Save this table
+
+```{r}
+write.csv(incidence_dataset, file = "./output/covid19_incidence_month.csv", row.names = F)
+```
+
+
+
+Create a map
+
 ```{r}
 map2 <- ggplot(map_incidence) +
   geom_sf(aes(fill = incidence), size = 0.2) +
