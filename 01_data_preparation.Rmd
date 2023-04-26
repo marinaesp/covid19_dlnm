@@ -493,20 +493,36 @@ I noticed also that year 2021 had 52 full weeks, but the function `lubridate::we
 covid_df <- read.csv(file = "./output/covid19_total_week_v1.csv")
 pollution_df <- read.csv(file = "./output/pollution_mean_week.csv")
 vaccine_df <- read.csv(file = "./output/cumulative_vaccines_week.csv")
+pop_df <- read.delim(file = "./data/TF_SOC_POP_STRUCT_2020.txt", sep = ";")
 
 ```
 
 
-I see that in the vaccines dataset, for the first week of 2021 in January, there are only 564 municipalities that had records of vaccinations. In all the over weeks, all 581 municipalities had records of vaccinations.
-
-
+First, I aggregate the population over all age groups and both genders.
 
 ```{r}
-master_dat <- covid_df |> left_join(pollution_df, by = c("mcp_code",
-                                                   "week_num")) |> 
-  left_join(vaccine_df, by = c("mcp_code",
-                                                   "week_num")) |> 
+pop_prep <- pop_df |> 
+  select(c(CD_REFNIS,CD_SEX:MS_POPULATION )) |> 
+  group_by(CD_REFNIS) |> 
+  summarize(pop_tot = sum(MS_POPULATION)) |> 
+  rename(mcp_code = CD_REFNIS) 
+```
+
+I see that in the vaccines dataset, for the first week of 2021 in January, there are only 564 municipalities that had records of vaccinations. In all the over weeks, all 581 municipalities had records of vaccinations.
+
+```{r}
+master_dat <- covid_df |>
+  left_join(pop_prep, by = "mcp_code") |>
+  left_join(pollution_df, by = c(
+    "mcp_code",
+    "week_num"
+  )) |>
+  left_join(vaccine_df, by = c(
+    "mcp_code",
+    "week_num"
+  )) |>
   select(-X)
+ 
 ```
 
 And here are 17 municipalities, for which no vaccination data was recorded in week 1 of year 2021:
@@ -516,14 +532,16 @@ filter(master_dat, is.na(cumul_week))$mcp_code
 ```
 
 
+# Check collinearity in the complete dataset
+
 Check also for collinearity of pollution and vaccination data and with cases data
 
 ```{r}
-correlations_ms <- round(cor(master_dat[,c(6, 8:13)], use = "pairwise.complete.obs"),1)
-pvals_ms <- cor_pmat(master_dat[,c(6, 8:13)], digits = 2)
+correlations_ms <- round(cor(master_dat[,c(6, 7, 9:14)], use = "pairwise.complete.obs"),1)
+pvals_ms <- cor_pmat(master_dat[,c(6,7, 9:14)], digits = 2)
 
-colnames(correlations_ms) <- c("Cases",  "O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
-rownames(correlations_ms) <- c("Cases", "O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
+colnames(correlations_ms) <- c("Cases", "Pop",  "O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
+rownames(correlations_ms) <- c("Cases","Pop","O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
 
 cors_plot_ms <- ggcorrplot(correlations_ms, hc.order = TRUE, type = "lower",
      outline.col = "white", lab=TRUE, legend.title = "Pearson correlations") 
