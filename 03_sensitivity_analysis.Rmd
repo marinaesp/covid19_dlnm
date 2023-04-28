@@ -83,7 +83,7 @@ cases_prep <- cases |>
 ```{r}
 days21 <- data.frame(date = seq(as.Date("2021-01-01"), as.Date("2021-12-31"), by = "+1 day"))
 
-set.seed(210423)
+set.seed(210426)
 
 cases_prep2 <- cases_prep |>
   filter(year == "2021") |>
@@ -137,18 +137,19 @@ cases_filled_prep2 <- cases_filled_prep |>
 
 ```{r}
 cases_per_week <- cases_filled_prep2 |> 
- group_by(mcp_code, mcp_name, province, region, month, week) |> 
+  mutate(week = ifelse(week == 53, 52, week)) |> 
+ group_by(mcp_code, mcp_name, province, region, week) |> 
   summarize(cases_per_week = sum(cases)) |> 
   rename(week_num = week)
           
 ```
 
 ```{r}
-write.csv(cases_per_week, file = "./output/covid19_total_week_v2.csv")
+#write.csv(cases_per_week, file = "./output/covid19_total_week_v5.csv")
 ```
 
 
-# Compare summary statistics between tge 5 datasets
+# Compare summary statistics between the 5 datasets
 
 ```{r}
 covid2 <- read.csv(here("output", "covid19_total_week_v2.csv"))
@@ -166,7 +167,9 @@ stats4 <- mosaic::fav_stats(covid4$cases_per_week)
 stats5 <- mosaic::fav_stats(covid5$cases_per_week)
 
 summary_stats <-rbind(stats1, stats2, stats3, stats4, stats5)
-kable(summary_stats)
+rownames(summary_stats) <- c(1,2,3,4,5)
+kable(summary_stats) |> 
+  kable_styling("hover")
 
 
 ```
