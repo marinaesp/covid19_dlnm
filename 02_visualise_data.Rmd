@@ -169,7 +169,7 @@ Join map data and population data:
 ```{r}
 map_incidence <- map_prep |> 
   left_join(pop_prep, by = "mcp_code") |> 
-  mutate(incidence = total_monthly/ pop_tot * 10^4) #incidence per 10000 citizens
+  mutate(incidence = total_monthly/ pop_tot * 10^3) #incidence per 1000 citizens
 ```
 
 

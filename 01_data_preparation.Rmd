@@ -169,14 +169,14 @@ write.csv(covid_monthly_mean_total, "./output/covid19_monthly_mean_n_total.csv",
 
 ## Aggregate COVID19 cases per week
 
-Since week 53 is just the 31st of December, I will change these records to week 52.
+Since week 53 is just the 31st of December, I remove this day from the dataset.
 
 ```{r}
 
 cases_filled <- read.csv("./output/covid19_cases_perday_0filled.csv")
 
 cases_per_week <- cases_filled |> 
-  mutate(week = ifelse(week == 53, 52, week)) |> 
+  filter(!week == 53)  |> 
  group_by(mcp_code, mcp_name, province, region,  week) |> 
   summarize(cases_per_week = sum(cases)) |> 
   rename(week_num = week)
@@ -238,7 +238,7 @@ ozone_prep <-ozone |>
          month = str_sub(date, start = 5, end = 6),
          day = str_sub(date, start = 7, end = 8)
   ) |> 
-  filter(year == "2021") |> 
+  filter(year %in% c("2020", "2021")) |> 
   mutate(mcp_code = str_replace(mcp_code, pattern = "X", replacement = ""),
          date_formatted = ymd(date),
          week_num = week(date_formatted)) |> 
@@ -265,7 +265,7 @@ bc_prep <- bc|>
          month = str_sub(date, start = 5, end = 6),
          day = str_sub(date, start = 7, end = 8)
   ) |> 
-  filter(year == "2021") |> 
+ filter(year %in% c("2020", "2021")) |> 
   mutate(mcp_code = str_replace(mcp_code, pattern = "X", replacement = ""),
   date_formatted = ymd(date),
          week_num = week(date_formatted)) |> 
@@ -291,7 +291,7 @@ no2_prep <- no2|>
          month = str_sub(date, start = 5, end = 6),
          day = str_sub(date, start = 7, end = 8)
   ) |> 
-  filter(year == "2021") |> 
+  filter(year %in% c("2020", "2021")) |> 
   mutate(mcp_code = str_replace(mcp_code, pattern = "X", replacement = ""),
          date_formatted = ymd(date),
          week_num = week(date_formatted)) |> 
@@ -317,7 +317,7 @@ pm10_prep <- pm10|>
          month = str_sub(date, start = 5, end = 6),
          day = str_sub(date, start = 7, end = 8)
   ) |> 
-  filter(year == "2021") |> 
+ filter(year %in% c("2020", "2021")) |> 
   mutate(mcp_code = str_replace(mcp_code, pattern = "X", replacement = ""),
          date_formatted = ymd(date),
          week_num = week(date_formatted)) |> 
@@ -342,7 +342,7 @@ pm25_prep <- pm25|>
          month = str_sub(date, start = 5, end = 6),
          day = str_sub(date, start = 7, end = 8)
   ) |> 
-  filter(year == "2021") |> 
+  filter(year %in% c("2020", "2021")) |> 
   mutate(mcp_code = str_replace(mcp_code, pattern = "X", replacement = ""),
          date_formatted = ymd(date),
          week_num = week(date_formatted)) |> 
@@ -353,10 +353,10 @@ Combine the 5 pollutants in a common dataset
 
 ```{r}
 pollution <- ozone_prep |> 
-  left_join(bc_prep[,c(1,2,5,6)], by = c("mcp_code", "month", "day")) |> 
-  left_join(no2_prep[,c(1,2,5,6)], by = c("mcp_code", "month", "day")) |> 
-  left_join(pm10_prep[,c(1,2,5,6)], by = c("mcp_code", "month", "day")) |> 
-   left_join(pm25_prep[,c(1,2,5,6)], by = c("mcp_code", "month", "day")) |> 
+  left_join(bc_prep[,c(1,2,4,5,6)], by = c("mcp_code","year", "month", "day")) |> 
+  left_join(no2_prep[,c(1,2,4,5,6)], by = c("mcp_code", "year", "month", "day")) |> 
+  left_join(pm10_prep[,c(1,2,4,5,6)], by = c("mcp_code","year", "month", "day")) |> 
+   left_join(pm25_prep[,c(1,2,4,5,6)], by = c("mcp_code","year", "month", "day")) |> 
   select(c(mcp_code,city_name, year, month, day), everything()) |> 
   mutate(across(matches("pollution"), as.numeric)) |> 
   mutate(day = str_replace(day, pattern = "^0", replacement = ""),
@@ -414,12 +414,13 @@ Given the correlation values, we probably have to drop one of the particulate ma
 
 ## Aggregate pollution per week (mean value over a week)
 
+As we decided on 28.04.2023, I remove week 53 from both year 2021 (31st of December) and 2020 (30th and 31st of December)
 ```{r}
 pollution <-read.csv(file = "./output/pollutions_per_day.csv")
 
 pollution_week <- pollution |> 
-   mutate(week_num = ifelse(week_num == 53, 52, week_num)) |> 
-  group_by(mcp_code, city_name, week_num) |> 
+   filter(!week_num == 53) |> 
+  group_by(mcp_code, city_name, year, week_num) |> 
   summarize(pollution_ozone_wk = mean(pollution_ozone),
             pollution_bc_wk = mean(pollution_bc),
             pollution_no2_wk = mean(pollution_no2),
@@ -486,7 +487,7 @@ write.csv(vaccine_prep2, file = "./output/cumulative_vaccines_week.csv", row.nam
 
 # Create a complete dataset
 
-I noticed also that year 2021 had 52 full weeks, but the function `lubridate::week()` in R counts the 31st of December as week 53. I will remove this day or change it to also week 52, otherwise, we will be comparing 1 day measurements versus 7 day measurements.
+I noticed also that year 2021 had 52 full weeks, but the function `lubridate::week()` in R counts the 31st of December as week 53. I will remove this day from Covid dataset
 
 
 ```{r}
@@ -494,7 +495,6 @@ covid_df <- read.csv(file = "./output/covid19_total_week_v1.csv")
 pollution_df <- read.csv(file = "./output/pollution_mean_week.csv")
 vaccine_df <- read.csv(file = "./output/cumulative_vaccines_week.csv")
 pop_df <- read.delim(file = "./data/TF_SOC_POP_STRUCT_2020.txt", sep = ";")
-
 ```
 
 
@@ -513,12 +513,14 @@ I see that in the vaccines dataset, for the first week of 2021 in January, there
 ```{r}
 master_dat <- covid_df |>
   left_join(pop_prep, by = "mcp_code") |>
-  left_join(pollution_df, by = c(
+    left_join(vaccine_df, by = c(
     "mcp_code",
     "week_num"
-  )) |>
-  left_join(vaccine_df, by = c(
+  )) |> 
+  mutate(year = rep(2021, n())) |> 
+  full_join(pollution_df, by = c(
     "mcp_code",
+    "year",
     "week_num"
   )) |>
   select(-X)
@@ -528,20 +530,25 @@ master_dat <- covid_df |>
 And here are 17 municipalities, for which no vaccination data was recorded in week 1 of year 2021:
 
 ```{r}
-filter(master_dat, is.na(cumul_week))$mcp_code
+no_vacdat <- master_dat |> 
+  filter(year == "2021") |> 
+  filter(is.na(cumul_week))
+
+no_vacdat$mcp_code
 ```
 
 
-# Check collinearity in the complete dataset
+# Check collinearity in the complete dataset, for 2021
 
 Check also for collinearity of pollution and vaccination data and with cases data
 
 ```{r}
-correlations_ms <- round(cor(master_dat[,c(6, 7, 9:14)], use = "pairwise.complete.obs"),1)
-pvals_ms <- cor_pmat(master_dat[,c(6,7, 9:14)], digits = 2)
+master_dat21 <- filter(master_dat, year == "2021")
+correlations_ms <- round(cor(master_dat[,c(6, 7, 8, 11:15)], use = "pairwise.complete.obs"),1)
+pvals_ms <- cor_pmat(master_dat[,c(6, 7, 8, 11:15)], digits = 2)
 
-colnames(correlations_ms) <- c("Cases", "Pop",  "O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
-rownames(correlations_ms) <- c("Cases","Pop","O3", "BC", "NO2", "PM10", "PM2.5", "Vaccinations")
+colnames(correlations_ms) <- c("Cases", "Pop", "Vaccinations",  "O3", "BC", "NO2", "PM10", "PM2.5")
+rownames(correlations_ms) <- c("Cases","Pop", "Vaccinations","O3", "BC", "NO2", "PM10", "PM2.5")
 
 cors_plot_ms <- ggcorrplot(correlations_ms, hc.order = TRUE, type = "lower",
      outline.col = "white", lab=TRUE, legend.title = "Pearson correlations") 
