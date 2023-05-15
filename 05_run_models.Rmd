@@ -1,0 +1,107 @@
+---
+title: "Running and comparing INLA models"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+
+# Call source file with libraries, functions and data
+
+I load the file "04_crossbasis_definition.Rmd", where I created crossbasis variables, response data and random effects covariates, as well as inla function
+
+```{r}
+#source(knitr::purl("04_crossbasis_definition.rmd", quiet=TRUE)) #use when running for the 1st time
+source("04_crossbasis_definition.R")
+```
+
+# Define a baseline model (intercept-only)
+
+The baseline model does not include any of the pollutants or vaccination covariates. It only has a temporal random effect (here RW1) and a spatial random effect for municipality (BYM2 model). 
+
+* Temporal effect: the effect of a week, rw1 model ("replicate" option could be included to say that temporal effects are allowed to be different between the municipalities, but it caused inla to crash) 
+
+* Spatial effect: random spatial effect of municipality, the same for all months (or should we assume different spatial structure every month?)
+
+Constr = TRUE means that we apply constraint to zero sum of the random terms, but anyway, this is a default setting for BYM2, RW1 and RW2.
+
+```{r}
+baseformula <- Y ~ f(T1,  model = "rw1", constr = TRUE, scale.model = TRUE, hyper = precision.prior) +
+  f(S1, model = "bym2",graph = "output/adjacency.mat", scale.model = TRUE, hyper = precision.prior)
+```
+
+
+# Define formulas for 1-pollutants model
+
+```{r}
+formula.ozone <- update.formula(baseformula, ~ . + basis_ozone)
+formula.no2 <- update.formula(baseformula, ~ . + basis_no2)
+formula.pm10 <- update.formula(baseformula, ~ . + basis_pm10)
+formula.pm25 <- update.formula(baseformula, ~ . + basis_pm25)
+formula.bc <- update.formula(baseformula, ~ . + basis_bc)
+```
+
+
+# Run and compare  baseline and 1-pollutant models
+
+List of formulas and labels for the models:
+
+```{r}
+formulas <- list(baseformula, formula.ozone, formula.no2, formula.pm10, formula.pm25, formula.bc)
+labels <- c("basemodel", "model.ozone", "model.no2", "model.pm10", "model.pm25", "model.bc")
+```
+
+Run all models and extract DIC, save the model output 
+
+```{r}
+models <- lapply(1:length(formulas), 
+              function(i) {
+                model <- mymodel(formulas[[i]], df)
+                save(model, file = paste0("output/models/", labels[i],".RData"))})
+```
+
+
+```{r}
+#basemodel <-mymodel(baseformula, df)#dic = 229739.1
+#basemodel_poisson <- mymodel(baseformula, family = "poisson")#326103.5 also returned some NAN
+```
+
+
+```{r}
+table0 <- data.table::data.table(Model  = c("base", "ozone", "no2", "pm10", "pm25", "bc"),
+                     DIC = NA)
+
+for(i in 1:length(formulas))
+  {
+  load(paste0("output/models/",labels[i],".RData"))
+  table0$DIC[i] <- round(model$dic$dic, 0)
+}
+
+# view table
+table0
+
+
+```
+
+During exploration of the data, I have seen that BC is highly correlated with NO2, and PM10 correlated with PM25. So, based on DIC we may decide to choose only one pollutant from each pair. DIC suggest using BC and PM10.
+
+And just a trial for vaccine model:
+```{r}
+formula.vaccine <- update.formula(baseformula, ~. + basis_vaccine)
+model.vaccine <-mymodel(formula.vaccine, df )# DIC = 229718.01
+```
+
