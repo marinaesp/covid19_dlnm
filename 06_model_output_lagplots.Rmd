@@ -1,0 +1,28 @@
+---
+title: "Model output and plots"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+In this code, I will analyze model output for the selected model (bc_ozone_pm10). I will plot the random effects, and the plots of lagged effects and main effects of ozone, bc, and pm10.
+
+# Lag-response and exposure-response effects
+
+
+# Random effects plots
+

@@ -25,8 +25,8 @@ knitr::opts_chunk$set(echo = TRUE, message = FALSE)
 I load the file "04_crossbasis_definition.Rmd", where I created crossbasis variables, response data and random effects covariates, as well as inla function
 
 ```{r}
-#source(knitr::purl("04_crossbasis_definition.rmd", quiet=TRUE)) #use when running for the 1st time
-source("04_crossbasis_definition.R")
+source(knitr::purl("04_crossbasis_definition.rmd", quiet=TRUE)) #use when running for the 1st time
+#source("04_crossbasis_definition.R")
 ```
 
 # Define a baseline model (intercept-only)
@@ -53,16 +53,17 @@ formula.no2 <- update.formula(baseformula, ~ . + basis_no2)
 formula.pm10 <- update.formula(baseformula, ~ . + basis_pm10)
 formula.pm25 <- update.formula(baseformula, ~ . + basis_pm25)
 formula.bc <- update.formula(baseformula, ~ . + basis_bc)
+formula.vaccine <- update.formula(baseformula, ~ . + basis_vaccine)
 ```
 
 
-# Run and compare  baseline and 1-pollutant models
+# Run and compare  baseline and 1-pollutant models and vaccine model
 
 List of formulas and labels for the models:
 
 ```{r}
-formulas <- list(baseformula, formula.ozone, formula.no2, formula.pm10, formula.pm25, formula.bc)
-labels <- c("basemodel", "model.ozone", "model.no2", "model.pm10", "model.pm25", "model.bc")
+formulas <- list(baseformula, formula.ozone, formula.no2, formula.pm10, formula.pm25, formula.bc, formula.vaccine)
+labels <- c("basemodel", "model.ozone", "model.no2", "model.pm10", "model.pm25", "model.bc", "model.vaccine")
 ```
 
 Run all models and extract DIC, save the model output 
@@ -73,16 +74,15 @@ models <- lapply(1:length(formulas),
                 model <- mymodel(formulas[[i]], df)
                 save(model, file = paste0("output/models/", labels[i],".RData"))})
 ```
-
+I also tried a Poisson model, but it was not better than negative binomial models
 
 ```{r}
-#basemodel <-mymodel(baseformula, df)#dic = 229739.1
-#basemodel_poisson <- mymodel(baseformula, family = "poisson")#326103.5 also returned some NAN
+#basemodel_poisson <- mymodel(baseformula, family = "poisson")#326103.5 
 ```
 
 
 ```{r}
-table0 <- data.table::data.table(Model  = c("base", "ozone", "no2", "pm10", "pm25", "bc"),
+table0 <- data.table::data.table(Model  = c("base", "ozone", "no2", "pm10", "pm25", "bc", "vaccine"),
                      DIC = NA)
 
 for(i in 1:length(formulas))
@@ -93,15 +93,170 @@ for(i in 1:length(formulas))
 
 # view table
 table0
-
-
 ```
 
 During exploration of the data, I have seen that BC is highly correlated with NO2, and PM10 correlated with PM25. So, based on DIC we may decide to choose only one pollutant from each pair. DIC suggest using BC and PM10.
 
-And just a trial for vaccine model:
+
+# Multiple covariates models
+
+Try models with multiple covariates. For this model we do not consider, pm25 and no2, because they are strongly correlated with, respectively, with pm10 and with BC, both of which will be included in the model.
+
 ```{r}
-formula.vaccine <- update.formula(baseformula, ~. + basis_vaccine)
-model.vaccine <-mymodel(formula.vaccine, df )# DIC = 229718.01
+formula.multmodel1 <- update.formula(baseformula, ~ . +  basis_bc + basis_ozone)
+formula.multmodel2 <-update.formula(baseformula, ~ . + basis_bc + basis_ozone + basis_pm10)
+formula.multmodel3 <-update.formula(baseformula, ~ . + basis_bc + basis_ozone +  basis_pm10 + basis_vaccine)
 ```
 
+```{r}
+formulas_mult <-list(formula.bc, formula.multmodel1, formula.multmodel2, formula.multmodel3)
+labels_mult <-c("model.bc", "model.bc_ozone", "model.bc_ozone_pm10", "model.bc_ozone_pm10_vaccine")
+```
+
+```{r}
+models_mult <- lapply(1:length(formulas_mult), 
+              function(i) {
+                model <- mymodel(formulas_mult[[i]], df)
+                save(model, file = paste0("output/models/", labels_mult[i],".RData"))})
+```
+These models will be compared by DIC and logscore (minus log of the conditional predictive ordinate). Interpretation of CPO: low cpo for y_i means poor posterior fit for this value of y. cpo's are less then 1, farther away from 1 if the fit is poor. log(cpo) is negative and large if the fit is very poor, but the inverse (-mean(log)) will indicated that small positive value = good fit. It is easier to interpret cpo in this way, to use it alongside with DIC (where smaller=better).
+
+```{r}
+table1 <- data.table::data.table(Model  = c("model_bc", "bc_ozone", "bc_ozone_pm10", "bc_ozone_pm10_vaccine"),
+                     DIC = NA,
+                     logscore = NA)
+
+for(i in 1:length(formulas_mult))
+  {
+  load(paste0("output/models/",labels_mult[i],".RData"))
+  table1$DIC[i] <- round(model$dic$dic, 0)
+  table1$logscore[i] <- round(-mean(log(model$cpo$cpo), na.rm=T), 4)
+}
+
+# view table
+table1
+```
+
+Summary: comparing the models only with BC with models containing other covariate except BC, I see that including ozone and pm10 in addition to BC, improves the model. On the other hand, including vaccination, only decreases DIC by 1 point, so there is no need to include vaccination as well.
+The logscore of fit for bc_ozone_pm10 models is the same as the model also including vaccine. This results again shows that vaccine data did not add any improvement to the model.
+
+We can consider the model "bc_ozone_pm10", as our preferred model.
+
+# A model including spatial-temporal interaction
+
+Here I modify the baseformula, to include a spatial-temporal iid interaction. This is a simple interaction that does not have any structure in space or time, a random spatial-temporal interaction.
+
+```{r}
+basesptemp <- Y ~ f(T1,  model = "rw1", constr = TRUE, scale.model = TRUE, hyper = precision.prior) +
+  f(S1, model = "bym2",graph = "output/adjacency.mat", scale.model = TRUE, hyper = precision.prior) +
+  f(T1.1, model = "iid") +  #temporal iid phi_j
+  f(S1.T1, model = "iid") #interaction type 1
+```
+
+
+```{r}
+model.sptemp1 <- mymodel(basesptemp, df)
+```
+
+## Bases spatial-temporal model: DIC
+
+```{r}
+dic_sptemp <- model.sptemp1$dic$dic
+logscore_sptemp <- round(-mean(log(model.sptemp1$cpo$cpo), na.rm = T),4)
+
+
+dic_sptemp
+logscore_sptemp
+```
+There is a large change in DIC for spatial-temporal model, from 229739	 (basemodel) to 207984 (basemodel including spatial-temporal interaction).
+
+Because there is an indication that spatial-temporal model fits the data better than no-interaction model, I rerun models with pollutants now including also interaction.
+
+
+# Spatial-temporal models with 1 covariate
+
+```{r}
+formula.sptemp.bc <- update.formula(basesptemp, ~ . +  basis_bc)
+formula.sptemp.ozone <- update.formula(basesptemp, ~ .  + basis_ozone)
+formula.sptemp.pm10 <-update.formula(basesptemp, ~ .  + basis_pm10)
+formula.sptemp.pm25 <-update.formula(basesptemp, ~ .  +  basis_pm25)
+formula.sptemp.no2 <-update.formula(basesptemp, ~ .  + basis_no2)
+formula.sptemp.vaccine <- update.formula(basesptemp, ~ . + basis_vaccine)
+```
+
+
+```{r}
+formulas.sptemp <- list(formula.sptemp.bc, formula.sptemp.ozone, formula.sptemp.pm10, 
+                        formula.sptemp.pm25,formula.sptemp.no2, formula.sptemp.vaccine)
+labels.sptemp <- c("sptemp.model.bc", "sptemp.model.ozone", "sptemp.model.pm10", "sptemp.model.pm25", "sptemp.no2", "sptemp.model.vaccine")
+```
+
+```{r}
+models.sptemp <- lapply(1:length(formulas.sptemp), 
+              function(i) {
+                model <- mymodel(formulas.sptemp[[i]], df)
+                save(model, file = paste0("output/models/", labels.sptemp[i],".RData"))})
+```
+
+
+```{r}
+table2 <- data.table::data.table(Model  = c("sptemp.bc", "sptemp.ozone", "sptemp.pm10", "sptemp.pm25",  "sptemp.no2", "sptemp.vaccine"),
+                     DIC = NA,
+                     logscore = NA)
+
+for(i in 1:length(formulas.sptemp))
+  {
+  load(paste0("output/models/",labels.sptemp[i],".RData"))
+  table2$DIC[i] <- round(model$dic$dic, 0)
+  table2$logscore[i] <- round(-mean(log(model$cpo$cpo), na.rm=T), 4)
+}
+
+# view table
+table2
+```
+
+Based on the comparison between 1-covariate spatial-temporal model, we still can choose a model with BC (and not include NO2), ozone, and pm25 (while pm10 would be selected in the no interaction model). Vaccine is likely not an important covariate.
+
+# Spatial-temporal models and multiple covariates models
+
+I have tried the models including, bc, ozone and, in addition, pm25. But they crush, rerun 3 times with the same result. I will instead try to use pm10.
+
+```{r}
+formula.sptemp.multmodel2 <- update.formula(basesptemp, ~ . +  basis_bc + basis_ozone)
+formula.sptemp.multmodel3 <-update.formula(basesptemp, ~ . + basis_bc + basis_ozone + basis_pm10)
+formula.sptemp.multmodel4 <-update.formula(basesptemp, ~ . + basis_bc + basis_ozone +  basis_pm10 + basis_vaccine)
+```
+
+```{r}
+formulas.sptemp.mult <-list(formula.sptemp.multmodel2, formula.sptemp.multmodel3, formula.sptemp.multmodel4)
+labels.sptemp.mult <-c("sptemp.model.bc", "sptemp.model.bc_ozone", "sptemp.model.bc_ozone_pm10", "sptemp.model.bc_ozone_pm10_vaccine")
+```
+
+```{r}
+models.sptemp.mult <- lapply(1:length(formulas.sptemp.mult), 
+              function(i) {
+                model <- mymodel(formulas.sptemp.mult[[i]], df)
+                save(model, file = paste0("output/models/", labels.sptemp.mult[i],".RData"))})
+```
+
+Compare the spatial-temporal models
+
+```{r}
+table3 <- data.table::data.table(Model  = c("sptemp.bc_ozone", "sptemp.bc_ozone_pm10", "sptemp.bc_ozone_pm10_vaccine"),
+                     DIC = NA,
+                     logscore = NA)
+
+for(i in 1:length(formulas.sptemp.mult))
+  {
+  load(paste0("output/models/",labels.sptemp.mult[i],".RData"))
+  table3$DIC[i] <- round(model$dic$dic, 0)
+  table3$logscore[i] <- round(-mean(log(model$cpo$cpo), na.rm=T), 4)
+}
+
+# view table
+table3
+```
+
+Spatial-temporal models suggest an effect of BC, but when adding other pollutants the model does not really improve (no further decrease in DIC). Should we conclude that BC is the only important effect we can identify in our data?
+
+For now, select the model with bc, ozone and pm10 as the final, although it did not have the lowest DIC.

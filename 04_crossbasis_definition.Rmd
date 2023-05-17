@@ -44,7 +44,7 @@ Load master file on COVID-19 cases, population, and pollution per week.
 data <- read.csv(here("output", "master_dataset.csv"))
 ```
 
-Arrange data by year and weeknumber within each municipality
+Arrange data by year and week number within each municipality
 
 ```{r}
 data_sort <- data |> 
@@ -63,7 +63,8 @@ nlag = 6
 For creating lags of pollution data and vaccination data, I will use `tsModel` package.
 
 We observed strong positive correlation between pm10 and pm2.5 (0.9), and between BC and NO2 (0.8).
-It is possible that one of pollutants in each of these pairs will not be included in the final analysis, but we first can test them individually by comparing DIC.
+It is possible that one of pollutants in each of these pairs will not be included in the final analysis, but we first can test them individually by comparing DIC. 
+For the vaccine data, numger of lags is 2 weeks at most, so it will be difficult to include vaccine in the same model as the pollutants. But we can try a separate model.
 
 ```{r}
 lag_ozone <- tsModel::Lag(data_sort$pollution_ozone_wk, group = data_sort$mcp_code, k = 0:nlag)
@@ -71,13 +72,13 @@ lag_no2 <- tsModel::Lag(data_sort$pollution_no2_wk, group = data_sort$mcp_code, 
 lag_pm25 <- tsModel::Lag(data_sort$pollution_pm25_wk, group = data_sort$mcp_code, k = 0:nlag)
 lag_pm10 <- tsModel::Lag(data_sort$pollution_pm10_wk, group = data_sort$mcp_code, k = 0:nlag)
 lag_bc <- tsModel::Lag(data_sort$pollution_bc_wk, group = data_sort$mcp_code, k = 0:nlag)
-lag_vaccine <-tsModel::Lag(data_sort$cumul_week, group = data_sort$mcp_code, k = 0:nlag)
+lag_vaccine <-tsModel::Lag(data_sort$cumul_week, group = data_sort$mcp_code, k = 0:2)
 ```
 
 We have to remove the  weeks  of year 2020, because it will only have NA for covid19 response data.
 We needed year 2020 (the weeks 47 to 52) only to create 6-weeks lags in the pollution variables.
 
-For vaccine data, I do the same, but since we do not have data from 2020 for vaccine, it will have 3486 (581*6) rows with missing data. But there are additional 17 missing data for 17 municipalities that did not have vaccination data in 2021 (see 01_data_preparation.Rmd file for the list of these vaccines).
+For vaccine data, I do the same, but since we do not have data from 2020 for vaccine, it will have 1162 (581*2) rows with missing data. But there are additional 17 missing data for 17 municipalities that did not have vaccination data in 2021 (see 01_data_preparation.Rmd file for the list of these vaccines).
 
 ```{r}
 colSums(is.na(lag_ozone))
@@ -125,7 +126,7 @@ basis_bc <-crossbasis(lag_bc,
 
 basis_vaccine <- crossbasis(lag_vaccine,
                     argvar = list(fun = "ns", knots = equalknots(data_prep$cumul_week, 2)),
-                    arglag = list(fun = "ns", knots = nlag/2))
+                    arglag = list(fun = "ns", knots = 1))#cannot use more than 1 knot for arglag
 ```
 
 
@@ -143,7 +144,6 @@ colnames(basis_vaccine) = paste0("basis_vaccine.", colnames(basis_vaccine))
 
 
 
-
 Define penalized complexity prior for spatial random effect and for temporal effect
 
 ```{r}
@@ -151,7 +151,6 @@ precision.prior <- list(prec = list(prior = "pc.prec", param = c(0.5, 0.01)))
 ```
 
 INLA model function. Note that in the control.predictor we set link=1, this means we want a logit link function.
-
 
 
 
@@ -235,7 +234,9 @@ data_prep <- left_join(data_prep, mcp_index, by = "mcp_code")
 ```
 
 
-Create final variables for INLA models 
+Create final variables for INLA models. There is a variable  S1.T1 (municipality id  by week) - this is just an indicator variable for unique combinations of municipality and week, to model a spatial-temporal interaction. First, I concatenate S1 (municipality id) and week number, make this combination a factor and then a number from 1 to the number of combinations, so that, each combination is assigned a unique number (1 to 30212 = 581*52).
+
+We also need a copy of week identificator (T1), I will call it T1.1, to create phi_j random effect (iid) of week and to use it in the interaction type 1.
 
 ```{r}
 Y <- data_prep$cases_per_week  #observed cases of COVID-19 per week
@@ -243,12 +244,14 @@ N <- length(Y)  #total length of the dataset
 E <- data_prep$pop_tot/10^3  #for the incidence per 1000 population
 T1 <- data_prep$week_num  #week indicator = week number
 S1 <- data_prep$mcp_id  #municipality indicator (1 to 581)
+T1.1 <-T1
+S1.T1 <- 1:nrow(data_prep)
 ```
 
 Create a dataframe for model testing
 
 ```{r}
-df <- data.frame(Y, E, T1,S1)
+df <- data.frame(Y, E, T1,S1, T1.1, S1.T1)
 ```
 
 

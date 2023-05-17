@@ -444,7 +444,7 @@ write.csv(pollution_week, file = "./output/pollution_mean_week.csv", row.names =
 vaccine <- read.csv(here("data", "COVID19BE_VACC_MUNI_CUM.csv"))
 ```
 
-For vaccination data, I choose only year 2021 and aggregate vaccines of any type and over all age groups who took the vaccine.
+For vaccination data, I choose only year 2021 and aggregate vaccines of any type and over all age groups who took the vaccine. There were only 1 week (week 53) with data in vaccination in 2020.
 There are 4317 observations where no information on municipality is recorded, I will remove these rows.
 
 ```{r}
