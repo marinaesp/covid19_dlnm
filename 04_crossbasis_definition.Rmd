@@ -29,6 +29,7 @@ library(spdep)
 library(sp)
 library(rgdal)
 library(dlnm)
+library(RColorBrewer)
 ```
 
 
