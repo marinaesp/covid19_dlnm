@@ -89,6 +89,7 @@ for(i in 1:length(formulas))
   {
   load(paste0("output/models/",labels[i],".RData"))
   table0$DIC[i] <- round(model$dic$dic, 0)
+  table0$logscore[i] <- round(-mean(log(model$cpo$cpo), na.rm=T), 4)
 }
 
 # view table
@@ -106,11 +107,14 @@ Try models with multiple covariates. For this model we do not consider, pm25 and
 formula.multmodel1 <- update.formula(baseformula, ~ . +  basis_bc + basis_ozone)
 formula.multmodel2 <-update.formula(baseformula, ~ . + basis_bc + basis_ozone + basis_pm10)
 formula.multmodel3 <-update.formula(baseformula, ~ . + basis_bc + basis_ozone +  basis_pm10 + basis_vaccine)
+formula.multmodel4 <-update.formula(baseformula, ~ . + basis_bc + basis_ozone +  basis_vaccine)
+formula.multmodel5 <-update.formula(baseformula, ~ . + basis_bc + basis_vaccine)
 ```
 
 ```{r}
-formulas_mult <-list(formula.bc, formula.multmodel1, formula.multmodel2, formula.multmodel3)
-labels_mult <-c("model.bc", "model.bc_ozone", "model.bc_ozone_pm10", "model.bc_ozone_pm10_vaccine")
+formulas_mult <-list(formula.bc, formula.multmodel1, formula.multmodel2, formula.multmodel3, formula.multmodel4,formula.multmodel5 )
+labels_mult <-c("model.bc", "model.bc_ozone", "model.bc_ozone_pm10", "model.bc_ozone_pm10_vaccine",
+                "model.bc_ozone_vaccine", "model.bc_vaccine")
 ```
 
 ```{r}
@@ -119,10 +123,12 @@ models_mult <- lapply(1:length(formulas_mult),
                 model <- mymodel(formulas_mult[[i]], df)
                 save(model, file = paste0("output/models/", labels_mult[i],".RData"))})
 ```
+
+
 These models will be compared by DIC and logscore (minus log of the conditional predictive ordinate). Interpretation of CPO: low cpo for y_i means poor posterior fit for this value of y. cpo's are less then 1, farther away from 1 if the fit is poor. log(cpo) is negative and large if the fit is very poor, but the inverse (-mean(log)) will indicated that small positive value = good fit. It is easier to interpret cpo in this way, to use it alongside with DIC (where smaller=better).
 
 ```{r}
-table1 <- data.table::data.table(Model  = c("model_bc", "bc_ozone", "bc_ozone_pm10", "bc_ozone_pm10_vaccine"),
+table1 <- data.table::data.table(Model  = c("model_bc", "bc_ozone", "bc_ozone_pm10","bc_ozone_vaccine", "bc_ozone_vaccine", "bc_vaccine"),
                      DIC = NA,
                      logscore = NA)
 
@@ -141,6 +147,11 @@ Summary: comparing the models only with BC with models containing other covariat
 The logscore of fit for bc_ozone_pm10 models is the same as the model also including vaccine. This results again shows that vaccine data did not add any improvement to the model.
 
 We can consider the model "bc_ozone_pm10", as our preferred model.
+
+
+
+
+
 
 # A model including spatial-temporal interaction
 
@@ -263,7 +274,7 @@ Spatial-temporal models suggest an effect of BC, but when adding other pollutant
 
 For now, select the model with bc, ozone and pm10 as the final, although it did not have the lowest DIC.
 
-A final additional model: base + bc +pm25 (it crushed during the previous runs)
+An  additional model: base + bc +pm25 (it crushed during the previous runs)
 
 ```{r}
 formula.sptemp.multmodel8 <- update.formula(basesptemp, ~ . + basis_bc  + basis_pm25)
@@ -275,5 +286,7 @@ model$dic$dic
 round(-mean(log(model$cpo$cpo), na.rm=T), 4)
 
 ```
+
+
 
 

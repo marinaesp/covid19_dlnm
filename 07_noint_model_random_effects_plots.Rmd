@@ -1,0 +1,90 @@
+---
+title: "Random effects plots"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+Load the selected no-interaction model
+
+```{r}
+source("04_crossbasis_definition.R")
+load("output/models/model.bc_ozone_pm10.RData")
+```
+
+
+# Temporal random effects
+
+```{r}
+week_effect <- model1$summary.random$T1[,c(1:4,6)]
+names(week_effect) <- c("week", "mean", "sd", "lower","upper")
+```
+
+
+```{r}
+
+plot_week_effect <-
+  ggplot(data = week_effect) + 
+  geom_ribbon(aes(x = week, ymin = lower, ymax = upper), 
+              fill = "indianred1", alpha = 0.5) + 
+  geom_line(aes(x = week, y = mean), col = "indianred4") +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey70") +
+  xlab("Week") +
+  ylab("Contribution to log(IR)") +
+  scale_y_continuous() +
+  scale_x_continuous(breaks = c(1,10,20,30,40,50)) +
+  theme_bw() +
+  theme(axis.text = element_text(face = "bold"))
+  
+ggsave("figs/week_effect_rw2.pdf", height = 7, width = 8, units = "cm")
+```
+
+# Spatial random effect of a municipality
+
+```{r}
+map_sf <-st_as_sf(map)
+map_sf <- map_sf |> select(c(AdMuKey, geometry)) |> 
+  rename(mcp_code = AdMuKey)
+```
+
+
+There are 1162 random effects values but we need only 581 of them - the combination of u and v components.
+
+```{r}
+spatial <- model1$summary.random$S1[c(1:581), c(1,2,3,4,6)]
+names(spatial) <- c("mcp_id", "mean", "sd", "lower", "upper")
+
+spatial <- spatial |>  left_join(mcp_index, by = "mcp_id") |> 
+  mutate(mcp_code = as.character(mcp_code)) 
+
+spatial_df <- left_join(map_sf, spatial, by =  "mcp_code")
+
+mn <-min(spatial_df$mean)
+mx <-max(spatial_df$mean)
+```
+
+```{r}
+plot_spatial <- ggplot(data = spatial_df) + 
+  geom_sf(aes(fill = mean)) +
+  scale_fill_distiller(palette = "PiYG", direction = -1, 
+                       limits = c(min(mn,-mx),max(mx,-mn))) +
+  labs(fill = "Contribution to \n log(IR)") +
+  theme_void() 
+  
+ggsave("figs/spatial_effect.pdf", height = 10, width = 15, units = "cm")
+```
+

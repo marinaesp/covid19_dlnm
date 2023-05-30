@@ -1,0 +1,617 @@
+---
+title: "Model output and plots"
+author: "Marina Espinasse"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    code_folding: show
+    toc: true
+    toc_depth: 2
+    toc_float: yes
+    number_sections: true
+    theme: cerulean
+    highlight: pygments
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE)
+```
+
+In this code, I will analyze model output for the selected model (bc_ozone). I will plot the random effects, and the plots of lagged effects and main effects of ozone, bc, and pm10.
+
+# Lag-response and exposure-response effects form no-interaction model
+
+
+Call the selected model - Base + BC + Ozone + pm10
+
+```{r}
+load("output/models/model.bc_ozone.RData")
+
+#source(knitr::purl("04_crossbasis_definition.rmd", quiet=TRUE))
+source("04_crossbasis_definition.R")
+
+```
+
+
+## Generate the predictions from DLNM
+
+Here, coef is a list of effects' coefficients for all the basis functions in the model: 9*3 = 27 basis functions (9 each for bc, ozone, and pm10) and 1 intercept. Below, we extract coefficients only for a particular pollutant, using "grep" function. For example, basis functions associated with bc, are listed as 2nd to 10th.
+
+```{r}
+#Extract full coef and vcov and create indicators for each term
+coef <- model$summary.fixed$mean
+vcov <- model$misc$lincomb.derived.covariance.matrix
+```
+
+
+## The  effects of Black Carbon
+
+First, we extract the effect of BC and then estimate predictions. 
+
+```{r}
+#find position of the terms associated with BC crossbasis
+indt <- grep("basis_bc", model$names.fixed)
+
+# extract predictions from the BC DLNM, center prediction on the minimal observed BC pollution  (0.06 mg/m3)
+predt_bc <- crosspred(basis_bc, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, cen = round(min(data_sort$pollution_bc_wk), 2))
+```
+
+Here matRRfit is the matrix of exponentiated specific associations from matfit. As a result, we get relative risk (times increase/decrease in the risk of COVID-19).
+
+y = predvar  is the vector or matrix of values used for predictions
+
+```{r}
+# contour plot of exposure-lag-response associations 
+pdf("figs/bc_contour.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_bc$predvar
+x <- seq(0, nlag, 0.5)
+z <- t(predt_bc$matRRfit)
+
+pal <- rev(brewer.pal(11, "PiYG"))
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal[1:6])
+col2 <- colorRampPalette(pal[6:11])
+cols <- c(col1(sum(levels < 1)), col2(sum(levels > 1)))
+
+
+
+filled.contour(x,y,z,
+               xlab = "Lag", ylab = expression(paste("BC", " " ,"µg"/"m"^3)), main = "",
+               col = cols,levels = levels,
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+#mtext(side = 2, at = max(y)*1.1, text = "a", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+
+```
+
+Same plot but without green color for RR < 1
+
+```{r}
+# contour plot of exposure-lag-response associations 
+pdf("figs/bc_contour_v2.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_bc$predvar
+x <- seq(0, nlag, 0.5)
+z <- t(predt_bc$matRRfit)
+
+pal <- brewer.pal(9, "Purples")
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal[2:9])
+col2<-colorRampPalette(c("white", "grey90"))#grey palette for RR <1
+cols_test <- c(col2(sum(levels < 1)), col1(sum(levels > 1)))
+cols_test[c(1,2)] <- "#ffffff" #if you want to remove green for RR <1
+
+
+
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("BC", " " ,"µg"/"m"^3)), main = "",
+               col = cols_test,levels = levels,
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+#mtext(side = 4, at = max(y), text = "RR", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+
+
+
+Lagged effects per level of BC
+
+```{r}
+# lag response for different BC scenarios: median pollution and maximal pollution
+pdf("figs/bc_scenario.pdf", width = 6, height = 6)
+
+# get exposures values
+vars <- predt_bc$predvar
+
+# obtain relative risk (RR) fit and upper and lower confidence limits for all exposure variables
+rr <- predt_bc$matRRfit
+rr.lci <- predt_bc$matRRlow
+rr.uci <- predt_bc$matRRhigh
+
+# set relative risk range 
+r1 <- min(range(rr, rr.lci, rr.uci))
+r2 <- max(range(rr, rr.lci, rr.uci))
+
+# get selected exposure variable positions
+md <- which(round(vars, 2) == 1.1)
+mx <- which(round(vars, 2) == 2.15)
+
+
+# define colours
+col1 <- brewer.pal(9, "Purples")[4]
+tcol1 <- do.call(rgb, c(as.list(col2rgb(col1)), alpha = 255/4, max = 255))
+
+col2 <- brewer.pal(9, "Purples")[9]
+tcol2 <- do.call(rgb, c(as.list(col2rgb(col2)), alpha = 255/4, max = 255))
+
+
+# define x values (lag, by lag)
+lagbylag <- seq(0, nlag, 0.5)
+
+# median pollution
+plot(lagbylag, rr[md,], col = col1, type = "l", lwd = 1, 
+     xlab = "Lag, weeks", ylab = "RR", main = "", 
+     ylim = range(r1, r2*1.11), frame.plot = T, axes = F)
+axis(1, at = 0:nlag, labels = 0:nlag)
+axis(2)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[md,], rev(rr.uci[md,]))
+polygon(xx, yy, col = tcol1, border = tcol1)
+
+
+# maximal pollution
+lines(lagbylag, rr[mx,], col = col2, lwd = 1)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[mx,], rev(rr.uci[mx,]))
+polygon(xx, yy, col = tcol2, border = tcol2)
+abline(h = 1, lty = 3)
+
+#expression(paste("BC", " " ,"µg"/"m"^3))
+legend("topleft",
+       legend = c(expression(paste("BC = ","1.1"," ", "µg"/"m"^3)),
+                      expression(paste("BC = ","2.15"," ", "µg"/"m"^3))      ),
+       col = c(col1, col2), cex = 0.8,
+       lwd = 2, lty = 1, bty = "n", 
+       y.intersp = 1.2, horiz = F)
+
+#mtext(side = 2, at = r2*1.25, text = "b", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+
+
+## The effects of Ozone
+
+
+```{r}
+#find position of the terms associated with ozone crossbasis
+indt <- grep("basis_ozone", model$names.fixed)
+
+# extract predictions from the  DLNM, center prediction on the minimal observed  pollution  (6.757 mg/m3)
+predt_ozone <- crosspred(basis_ozone, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, cen = round(min(data_sort$pollution_ozone_wk), 2))
+```
+
+
+All the same plots as for black carbon will be made for ozone
+
+```{r}
+pdf("figs/ozone_contour.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_ozone$predvar
+x <- seq(0, nlag, 0.5)
+z <- t(predt_ozone$matRRfit)
+
+pal <- brewer.pal(9, "Reds")
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal[2:9])
+col2<-colorRampPalette(c("white", "grey90"))#grey palette for RR <1
+cols_test <- c(col2(sum(levels < 1)), col1(sum(levels > 1)))
+cols_test[c(1,2,3)] <- "#ffffff" #if you want to remove green for RR <1
+
+
+
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("Ozone", " " ,"µg"/"m"^3)), main = "",
+               col = cols_test,levels = levels,
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+
+dev.off()
+```
+
+Scenario for median and close to maximal ozone levels
+
+```{r}
+# lag response for different BC scenarios: median pollution and maximal pollution
+pdf("figs/ozone_scenario.pdf", width = 6, height = 6)
+
+# get exposures values
+vars <- predt_ozone$predvar
+
+# obtain relative risk (RR) fit and upper and lower confidence limits for all exposure variables
+rr <- predt_ozone$matRRfit
+rr.lci <- predt_ozone$matRRlow
+rr.uci <- predt_ozone$matRRhigh
+
+# set relative risk range 
+r1 <- min(range(rr, rr.lci, rr.uci))
+r2 <- max(range(rr, rr.lci, rr.uci))
+
+# get selected exposure variable positions
+md <- which(round(vars, 2) == 44)
+mx <- which(round(vars, 2) == 82)
+
+
+# define colours
+col1 <- brewer.pal(9, "Reds")[4]
+tcol1 <- do.call(rgb, c(as.list(col2rgb(col1)), alpha = 255/4, max = 255))
+
+col2 <- brewer.pal(9, "Reds")[9]
+tcol2 <- do.call(rgb, c(as.list(col2rgb(col2)), alpha = 255/4, max = 255))
+
+
+# define x values (lag, by lag)
+lagbylag <- seq(0, nlag, 0.5)
+
+# median pollution
+plot(lagbylag, rr[md,], col = col1, type = "l", lwd = 1, 
+     xlab = "Lag, weeks", ylab = "RR", main = "", 
+     ylim = range(r1, r2*1.11), frame.plot = T, axes = F)
+axis(1, at = 0:nlag, labels = 0:nlag)
+axis(2)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[md,], rev(rr.uci[md,]))
+polygon(xx, yy, col = tcol1, border = tcol1)
+
+
+# maximal pollution
+lines(lagbylag, rr[mx,], col = col2, lwd = 1)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[mx,], rev(rr.uci[mx,]))
+polygon(xx, yy, col = tcol2, border = tcol2)
+abline(h = 1, lty = 3)
+
+legend("topleft",
+       legend = c(expression(paste("Ozone = ","44"," ", "µg"/"m"^3)),
+                      expression(paste("Ozone = ","82"," ", "µg"/"m"^3)) ),
+       col = c(col1, col2), cex = 0.8,
+       lwd = 2, lty = 1, bty = "n", 
+       y.intersp = 1.2, horiz = F)
+
+#mtext(side = 2, at = r2*1.25, text = "b", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+
+
+## The effects of PM10
+
+
+```{r}
+#find position of the terms associated with ozone crossbasis
+indt <- grep("basis_pm10", model1$names.fixed)
+
+# extract predictions from the DLNM, center prediction on the minimal observed pollution  (1.829 mg/m3)
+predt_pm10 <- crosspred(basis_pm10, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, 
+                   cen = round(min(data_sort$pollution_pm10_wk), 2))
+```
+
+
+All the same plots as for the other pollutants
+
+```{r}
+pdf("figs/pm10_contour.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_pm10$predvar
+x <- seq(0, nlag, 0.5)
+z <- t(predt_pm10$matRRfit)
+
+pal <- brewer.pal(9, "Blues")
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal[2:9])
+col2<-colorRampPalette(c("white", "grey90"))#grey palette for RR <1
+cols_test <- c(col2(sum(levels < 1)), col1(sum(levels > 1)))
+#cols_test[c(1,2,3)] <- "#ffffff" #if you want to remove green for RR <1
+
+
+
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("PM10", " " ,"µg"/"m"^3)), main = "",
+               col = cols_test,levels = levels,
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+
+dev.off()
+```
+
+Scenario for median and close to maximal pollution levels
+
+```{r}
+# lag response for different BC scenarios: median pollution and maximal pollution
+pdf("figs/pm10_scenario.pdf", width = 6, height = 6)
+
+# get exposures values
+vars <- predt_pm10$predvar
+
+# obtain relative risk (RR) fit and upper and lower confidence limits for all exposure variables
+rr <- predt_pm10$matRRfit
+rr.lci <- predt_pm10$matRRlow
+rr.uci <- predt_pm10$matRRhigh
+
+# set relative risk range 
+r1 <- min(range(rr, rr.lci, rr.uci))
+r2 <- max(range(rr, rr.lci, rr.uci))
+
+# get selected exposure variable positions
+md <- which(round(vars, 2) == 24)
+mx <- which(round(vars, 2) == 46)
+
+
+# define colours
+col1 <- brewer.pal(9, "Blues")[4]
+tcol1 <- do.call(rgb, c(as.list(col2rgb(col1)), alpha = 255/4, max = 255))
+
+col2 <- brewer.pal(9, "Blues")[9]
+tcol2 <- do.call(rgb, c(as.list(col2rgb(col2)), alpha = 255/4, max = 255))
+
+
+# define x values (lag, by lag)
+lagbylag <- seq(0, nlag, 0.5)
+
+# median pollution
+plot(lagbylag, rr[md,], col = col1, type = "l", lwd = 1, 
+     xlab = "Lag, weeks", ylab = "RR", main = "", 
+     ylim = range(r1, r2*1.11), frame.plot = T, axes = F)
+axis(1, at = 0:nlag, labels = 0:nlag)
+axis(2)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[md,], rev(rr.uci[md,]))
+polygon(xx, yy, col = tcol1, border = tcol1)
+
+
+# maximal pollution
+lines(lagbylag, rr[mx,], col = col2, lwd = 1)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[mx,], rev(rr.uci[mx,]))
+polygon(xx, yy, col = tcol2, border = tcol2)
+abline(h = 1, lty = 3)
+
+legend("topleft",
+       legend = c(expression(paste("pm10 = ","24"," ", "µg"/"m"^3)),
+                      expression(paste("pm10 = ","46"," ", "µg"/"m"^3))      ),
+       col = c(col1, col2), cex = 0.8,
+       lwd = 2, lty = 1, bty = "n", 
+       y.intersp = 1.2, horiz = F)
+
+#mtext(side = 2, at = r2*1.25, text = "b", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+# The effects of PM10 in the base + pm10 model
+
+We got very strange results for the pm10 effect in the model, where it also ozone and bc were included. Could this strange effects be due to a positive correlation between BC and pm10 (0.7)? We can check that by plotting the results for the model that include only the pm10 effect.
+
+
+```{r}
+load("output/models/model.pm10.RData")
+```
+
+```{r}
+coef <- model$summary.fixed$mean
+vcov <- model$misc$lincomb.derived.covariance.matrix
+```
+
+
+```{r}
+#find position of the terms associated with BC crossbasis
+indt <- grep("basis_pm10", model$names.fixed)
+
+# extract predictions from the DLNM, center prediction on the minimal observed pollution
+predt_pm10 <- crosspred(basis_pm10, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, cen = round(min(data_sort$pollution_pm10_wk), 2))
+```
+
+Plot the effects of pm10 based on this model
+```{r}
+pdf("figs/test_pm10_contour.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_pm10$predvar
+x <- seq(0, nlag, 0.5)
+z <- t(predt_pm10$matRRfit)
+
+pal <- brewer.pal(9, "Blues")
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal[2:9])
+col2<-colorRampPalette(c("grey90", "white"))#grey palette for RR <1
+cols_test <- c(col2(sum(levels < 1)), col1(sum(levels > 1)))
+#cols_test[c(1,2,3)] <- "#ffffff" #if you want to remove green for RR <1
+
+
+
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("PM10", " " ,"µg"/"m"^3)), main = "",
+               col = cols_test,levels = levels,
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+
+dev.off()
+```
+
+Scenario for median and close to maximal pollution levels
+
+```{r}
+# lag response for different BC scenarios: median pollution and maximal pollution
+pdf("figs/test_pm10_scenario.pdf", width = 6, height = 6)
+
+# get exposures values
+vars <- predt_pm10$predvar
+
+# obtain relative risk (RR) fit and upper and lower confidence limits for all exposure variables
+rr <- predt_pm10$matRRfit
+rr.lci <- predt_pm10$matRRlow
+rr.uci <- predt_pm10$matRRhigh
+
+# set relative risk range 
+r1 <- min(range(rr, rr.lci, rr.uci))
+r2 <- max(range(rr, rr.lci, rr.uci))
+
+# get selected exposure variable positions
+md <- which(round(vars, 2) == 24)
+mx <- which(round(vars, 2) == 46)
+
+
+# define colours
+col1 <- brewer.pal(9, "Blues")[4]
+tcol1 <- do.call(rgb, c(as.list(col2rgb(col1)), alpha = 255/4, max = 255))
+
+col2 <- brewer.pal(9, "Blues")[9]
+tcol2 <- do.call(rgb, c(as.list(col2rgb(col2)), alpha = 255/4, max = 255))
+
+
+# define x values (lag, by lag)
+lagbylag <- seq(0, nlag, 0.5)
+
+# median pollution
+plot(lagbylag, rr[md,], col = col1, type = "l", lwd = 1, 
+     xlab = "Lag, weeks", ylab = "RR", main = "", 
+     ylim = range(r1, r2*1.11), frame.plot = T, axes = F)
+axis(1, at = 0:nlag, labels = 0:nlag)
+axis(2)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[md,], rev(rr.uci[md,]))
+polygon(xx, yy, col = tcol1, border = tcol1)
+
+
+# maximal pollution
+lines(lagbylag, rr[mx,], col = col2, lwd = 1)
+xx <- c(lagbylag, rev(lagbylag))
+yy <- c(rr.lci[mx,], rev(rr.uci[mx,]))
+polygon(xx, yy, col = tcol2, border = tcol2)
+abline(h = 1, lty = 3)
+
+legend("topleft",
+       legend = c(expression(paste("pm10 = ","24"," ", "µg"/"m"^3)),
+                      expression(paste("pm10 = ","46"," ", "µg"/"m"^3))      ),
+       col = c(col1, col2), cex = 0.8,
+       lwd = 2, lty = 1, bty = "n", 
+       y.intersp = 1.2, horiz = F)
+
+#mtext(side = 2, at = r2*1.25, text = "b", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+
+# BC: Cumulative effect of pollution
+
+We again load the selected model (unless it is already loaded)
+
+```{r}
+load("output/models/model.bc_ozone_pm10.RData")
+```
+
+```{r}
+#Extract full coef and vcov and create indicators for each term
+coef <- model1$summary.fixed$mean
+vcov <- model1$misc$lincomb.derived.covariance.matrix
+```
+
+```{r}
+#find position of the terms associated with BC crossbasis
+indt <- grep("basis_bc", model1$names.fixed)
+
+# extract predictions from the BC DLNM, center prediction on the minimal observed BC pollution  (0.06 mg/m3)
+predt_bc <- crosspred(basis_bc, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, cen = round(min(data_sort$pollution_bc_wk), 2), cumul = TRUE)
+```
+
+```{r}
+# contour plot of exposure-lag-response associations 
+pdf("figs/bc_cumul_contour_v2.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_bc$predvar
+x <- seq(0, nlag)
+z <- t(predt_bc$cumRRfit)
+
+pal <- brewer.pal(9, "Purples")
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal)
+
+mypalette <- hcl.colors(24, palette = "viridis")
+
+library(grDevices)
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("BC", " " ,"µg"/"m"^3)), main = "",
+              color.palette = function(n) hcl.colors(n, "viridis", rev = TRUE),
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+#mtext(side = 4, at = max(y), text = "RR", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
+
+
+# Ozone: Cumulative effect of pollution
+
+
+```{r}
+#find position of the terms associated with BC crossbasis
+indt <- grep("basis_ozone", model1$names.fixed)
+
+# extract predictions from the BC DLNM, center prediction on the minimal observed BC pollution  (0.06 mg/m3)
+predt_ozone <- crosspred(basis_ozone, coef = coef[indt], vcov=vcov[indt,indt],
+                   model.link = "log", bylag = 0.5, cen = round(min(data_sort$pollution_ozone_wk), 2), cumul = TRUE)
+```
+
+```{r}
+# contour plot of exposure-lag-response associations 
+pdf("figs/ozone_cumul_contour.pdf", width = 8, height = 6)
+
+par(mar=c(5.1, 5, 4.1, 2.1))
+
+y <- predt_ozone$predvar
+x <- seq(0, nlag)
+z <- t(predt_ozone$cumRRfit)
+
+
+levels <- pretty(z, 20)
+col1 <- colorRampPalette(pal)
+
+mypalette <- hcl.colors(24, palette = "viridis")
+
+library(grDevices)
+filled.contour(x,y,z,
+               xlab = "Lag, weeks", ylab = expression(paste("BC", " " ,"µg"/"m"^3)), main = "",
+              color.palette = function(n) hcl.colors(n, "viridis", rev = TRUE),
+               plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
+                 axis(2)})
+
+#mtext(side = 4, at = max(y), text = "RR", las = 2, cex = 1.2, line = 2)
+
+dev.off()
+```
