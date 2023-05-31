@@ -23,14 +23,14 @@ Load the selected no-interaction model
 
 ```{r}
 source("04_crossbasis_definition.R")
-load("output/models/model.bc_ozone_pm10.RData")
+load("output/models/model.bc_ozone.RData")
 ```
 
 
 # Temporal random effects
 
 ```{r}
-week_effect <- model1$summary.random$T1[,c(1:4,6)]
+week_effect <- model$summary.random$T1[,c(1:4,6)]
 names(week_effect) <- c("week", "mean", "sd", "lower","upper")
 ```
 
@@ -65,7 +65,7 @@ map_sf <- map_sf |> select(c(AdMuKey, geometry)) |>
 There are 1162 random effects values but we need only 581 of them - the combination of u and v components.
 
 ```{r}
-spatial <- model1$summary.random$S1[c(1:581), c(1,2,3,4,6)]
+spatial <- model$summary.random$S1[c(1:581), c(1,2,3,4,6)]
 names(spatial) <- c("mcp_id", "mean", "sd", "lower", "upper")
 
 spatial <- spatial |>  left_join(mcp_index, by = "mcp_id") |> 
