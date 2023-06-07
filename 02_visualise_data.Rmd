@@ -214,3 +214,31 @@ ggsave("./figs/incidence_covid_mcp.pdf",
   height = 25, width = 36, units = "cm"
 )
 ```
+
+# Map of Belgian Regions
+
+```{r}
+map3 <- ggplot(map_prep) +
+  geom_sf(aes(fill = factor(region)),color = "grey18", size = 0.01) +
+   #scale_fill_manual(values = c("#4077bf","#7bc23d", "#c13e75"), 
+                    #labels = c("Brussels", "Flanders", "Walloon")) #first option of palette
+                    
+  scale_fill_brewer(palette="Pastel1", labels = c("Brussels", "Flanders", "Walloon")) +
+  labs(fill = "Region") +
+  theme(legend.text = element_text(face = "bold")) +
+  theme_void() 
+
+
+ggsave("./figs/regions_map.pdf",
+  plot = map3,
+  height = 10, width = 15, units = "cm"
+)
+```
+
+
+value_map <- ggplot(map) + 
+  geom_sf(aes(fill = factor(MAE$value)), lwd = 0) +
+  scale_fill_manual(values = c("#17becf","#dc5fbd"), breaks = 1:2, 
+                    labels = c("No added value", "Added value")) +
+  labs(fill = "") +
+  theme_void()

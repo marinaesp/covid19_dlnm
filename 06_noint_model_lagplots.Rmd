@@ -529,18 +529,18 @@ dev.off()
 We again load the selected model (unless it is already loaded)
 
 ```{r}
-load("output/models/model.bc_ozone_pm10.RData")
+load("output/models/model.bc_ozone.RData")
 ```
 
 ```{r}
 #Extract full coef and vcov and create indicators for each term
-coef <- model1$summary.fixed$mean
-vcov <- model1$misc$lincomb.derived.covariance.matrix
+coef <- model$summary.fixed$mean
+vcov <- model$misc$lincomb.derived.covariance.matrix
 ```
 
 ```{r}
 #find position of the terms associated with BC crossbasis
-indt <- grep("basis_bc", model1$names.fixed)
+indt <- grep("basis_bc", model$names.fixed)
 
 # extract predictions from the BC DLNM, center prediction on the minimal observed BC pollution  (0.06 mg/m3)
 predt_bc <- crosspred(basis_bc, coef = coef[indt], vcov=vcov[indt,indt],
@@ -576,12 +576,23 @@ dev.off()
 ```
 
 
+
+## Another plot for cumulative effects
+
+```{r}
+pdf("figs/bc_cumul_contour2.pdf", width = 8, height = 6)
+plot(predt_bc, ptype="overall",  xlab = expression(paste("BC", " " ,"µg"/"m"^3)), ylab="RR", col=6,
+     xlim=c(0.5,2.2))
+
+```
+
+
 # Ozone: Cumulative effect of pollution
 
 
 ```{r}
 #find position of the terms associated with BC crossbasis
-indt <- grep("basis_ozone", model1$names.fixed)
+indt <- grep("basis_ozone", model$names.fixed)
 
 # extract predictions from the BC DLNM, center prediction on the minimal observed BC pollution  (0.06 mg/m3)
 predt_ozone <- crosspred(basis_ozone, coef = coef[indt], vcov=vcov[indt,indt],
@@ -600,13 +611,13 @@ z <- t(predt_ozone$cumRRfit)
 
 
 levels <- pretty(z, 20)
-col1 <- colorRampPalette(pal)
+#col1 <- colorRampPalette(pal)
 
 mypalette <- hcl.colors(24, palette = "viridis")
 
 library(grDevices)
 filled.contour(x,y,z,
-               xlab = "Lag, weeks", ylab = expression(paste("BC", " " ,"µg"/"m"^3)), main = "",
+               xlab = "Lag, weeks", ylab = expression(paste("Ozone", " " ,"µg"/"m"^3)), main = "",
               color.palette = function(n) hcl.colors(n, "viridis", rev = TRUE),
                plot.axes = { axis(1, at = 0:nlag, c(0:nlag)) 
                  axis(2)})
@@ -615,3 +626,10 @@ filled.contour(x,y,z,
 
 dev.off()
 ```
+
+
+```{r}
+pdf("figs/ozone_cumul_contour2.pdf", width = 8, height = 6)
+plot(predt_ozone,col="red", ptype="overall", xlab=expression(paste("Ozone", " " ,"µg"/"m"^3)), ylab="RR", main="") 
+```
+
