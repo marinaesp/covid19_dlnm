@@ -579,11 +579,19 @@ dev.off()
 
 ## Another plot for cumulative effects
 
+For the following plot, I will also add the quantiles of BC concentrations used for predictions: 
+20% = 0.51, 50% =1.125,  95% = 2.0475.
+
 ```{r}
 pdf("figs/bc_cumul_contour2.pdf", width = 8, height = 6)
 plot(predt_bc, ptype="overall",  xlab = expression(paste("BC", " " ,"µg"/"m"^3)), ylab="RR", col=6,
      xlim=c(0.5,2.2))
-
+abline(v=0.5, col="slateblue4", lty = 3, lwd = 2)#20%
+abline(v=1.125, col="slateblue4", lty = 3, lwd = 2)#50%
+abline(v=2.05, col="slateblue4", lty = 3, lwd = 2)#95%
+text(0.5, 1250,col="slateblue4", "20%", cex = 1)
+text(1.125, 1250,col="slateblue4", "50%", cex = 1)
+text(2.05, 1250,col="slateblue4", "95%", cex = 1)
 ```
 
 
@@ -627,9 +635,16 @@ filled.contour(x,y,z,
 dev.off()
 ```
 
+Quantiles of ozone pollution 20% = 24.4, 50% = 46 , 95% = 78.4
 
 ```{r}
 pdf("figs/ozone_cumul_contour2.pdf", width = 8, height = 6)
-plot(predt_ozone,col="red", ptype="overall", xlab=expression(paste("Ozone", " " ,"µg"/"m"^3)), ylab="RR", main="") 
+plot(predt_ozone,col="red", ptype="overall", xlab=expression(paste("Ozone", " " ,"µg"/"m"^3)), ylab="RR", main="", ylim = c(0,24)) 
+abline(v=24.4, col="red4", lty = 3, lwd = 2)#20%
+abline(v=46, col="red4", lty = 3, lwd = 2)#50%
+abline(v=78.4, col="red4", lty = 3, lwd = 2)#95%
+text(24.4, 24,col="red4", "20%", cex = 1)
+text(46, 24,col="red4", "50%", cex = 1)
+text(78.4, 24,col="red4", "95%", cex = 1)
 ```
 
