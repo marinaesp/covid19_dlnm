@@ -79,7 +79,7 @@ lag_vaccine <-tsModel::Lag(data_sort$cumul_week, group = data_sort$mcp_code, k =
 We have to remove the  weeks  of year 2020, because it will only have NA for covid19 response data.
 We needed year 2020 (the weeks 47 to 52) only to create 6-weeks lags in the pollution variables.
 
-For vaccine data, I do the same, but since we do not have data from 2020 for vaccine, it will have 1162 (581*2) rows with missing data. But there are additional 17 missing data for 17 municipalities that did not have vaccination data in 2021 (see 01_data_preparation.Rmd file for the list of these vaccines).
+For vaccine data, I do the same, but since we do not have data from 2020 for vaccine, it will have 1162 (581*2) rows with missing data. But there are additional 17 missing data for 17 municipalities that did not have vaccination data in 2021 (see 01_data_preparation.Rmd file for the list of these municipalities).
 
 ```{r}
 colSums(is.na(lag_ozone))
