@@ -152,6 +152,7 @@ cases_per_week <- cases_filled_prep2 |>
 # Compare summary statistics between the 5 datasets
 
 ```{r}
+covid1 <- read.csv(here("output", "covid19_total_week_v1.csv"))
 covid2 <- read.csv(here("output", "covid19_total_week_v2.csv"))
 covid3 <- read.csv(here("output", "covid19_total_week_v3.csv"))
 covid4 <- read.csv(here("output", "covid19_total_week_v4.csv"))

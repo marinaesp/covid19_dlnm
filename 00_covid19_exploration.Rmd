@@ -70,7 +70,7 @@ How many missing data points in each column?
 map(cases, ~ sum(is.na(.x)))
 ```
 
-There are 1071 row of data (including all years 2020-2023 and most of the moths), where there is no information on municipality. Can we just remove these rows? 
+There are 1071 row of data (including all years 2020-2023 and most of the months), where there is no information on municipality. Can we just remove these rows? 
 
 
 How many of such observations without municipality information were in 2021?

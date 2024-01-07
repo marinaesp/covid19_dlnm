@@ -24,7 +24,7 @@ In this code, I will analyze model output for the selected model (bc_ozone). I w
 # Lag-response and exposure-response effects form no-interaction model
 
 
-Call the selected model - Base + BC + Ozone + pm10
+Call the selected model - Base + BC + Ozone 
 
 ```{r}
 load("output/models/model.bc_ozone.RData")
@@ -302,6 +302,7 @@ dev.off()
 
 ## The effects of PM10
 
+This plots was just a check of possible PM10 effect, this pollutant was not icnluded in the final model.
 
 ```{r}
 #find position of the terms associated with ozone crossbasis
